@@ -6,5 +6,6 @@
   "idf.portWin": "COM7",
   "idf.openOcdConfigs": [
     "board/esp32c6-builtin.cfg"
-  ]
+  ],
+  "idf.flashType": "UART"
 }

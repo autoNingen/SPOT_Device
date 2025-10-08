@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/CMakeFiles/bootloader
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/CMakeFiles/bootloader.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/CMakeFiles/bootloader-complete.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+C:/Users/charl/Schoolwork/ESPwork/HA_on_off_switch_real/HA_on_off_switch/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
