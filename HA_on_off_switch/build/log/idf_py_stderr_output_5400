@@ -1,0 +1,10 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe -DESP_PLATFORM=1 -DIDF_TARGET=esp32c6 -DCCACHE_ENABLE=0 C:\Users\charl\Schoolwork\ESPwork\HA_on_off_switch_real\HA_on_off_switch
+fatal: not a git repository (or any of the parent directories): .git
+fcae32885--1.6.4-2025-10-08 18:40:28 UTC
+CMake Error at C:/Espressif/frameworks/esp-idf-v5.5.1/tools/cmake/component.cmake:286 (message):
+  SRC_DIRS entry '../../../common/zcl_utility/src' does not exist.
+Call Stack (most recent call first):
+  C:/Espressif/frameworks/esp-idf-v5.5.1/tools/cmake/component.cmake:455 (__component_add_sources)
+  main/CMakeLists.txt:1 (idf_component_register)
+
+
