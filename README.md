@@ -1,6 +1,7 @@
 # SPOT Device & Coordinator
 The End device should have I2C pins set to SDA = 6, SCL = 7
-Currently Coordinator is not accepting data properly, will resolve
+Coordinator can only accept packets in float (uint32_t) with values from 10-50. (Might be able to adjust in future)
+For now, data is validated on each end in order to get accurate readings in mm.
 
 Note:
  * This board means the board (e.g. ESP32-H2) loaded with `Zigbee_Thermostat` example.
