@@ -51,10 +51,15 @@ volatile bool displayOn = true;
 1 == HIGH & 2 == LOW -> Recoverable Error
 1&2 == LOW -> Shit
 */
-#define CE 8      // SETTING THIS PIN LOW DISABLES BATTERY CHARGING
+#define CE 8        // SETTING THIS PIN LOW DISABLES BATTERY CHARGING
 
-// Battery status count
-volatile unsigned int count = 10;
+// Checking Voltage
+#define VOLTAGE 4   // CHECK ANALOG VOLTAGE
+#define MOSFET 18   // TURN ON/OFF VOLTAGE DIVIDER
+int potValue;
+float batteryVoltage;
+float batteryCutoffs[10] = {1.6, 1.65, 1.7, 1.75, 1.8, 1.85, 1.9, 1.95, 2.00, 2.05};
+int batteryCount;
 
 /*--------------------------------------------------------------------------------------*/
 /*----------------------------- MAIN ARDUINO PROGRAM -----------------------------------*/
@@ -85,9 +90,15 @@ void setup()
   pinMode(STAT2, INPUT_PULLUP);
   pinMode(CE, INPUT_PULLUP);
 
-    // Init TOF pins
+  // Init TOF pins
   pinMode(TOF_GPIO, INPUT_PULLUP);
   pinMode(XSHUT, INPUT_PULLUP);
+
+  // Init MOSFET pin
+  pinMode(MOSFET, OUTPUT);
+  
+  // Init ADC for Battery Level
+  analogSetAttenuation(ADC_14db);
 
   /* ESP ZIGBEE CONFIGURATIONS */
   // Optional: set Zigbee device name and model
@@ -101,7 +112,7 @@ void setup()
   // Add endpoint to Zigbee Core
   Zigbee.addEndpoint(&zbTempSensor);
 
-// Init display
+  // Init display
   u8g2.begin();
   updateDisplay();
   delay(1000);
@@ -119,13 +130,20 @@ void setup()
   {
     Serial.println("Zigbee started successfully!");
   }
-  Serial.println("Connecting to network");
-  while (!Zigbee.connected()) 
+
+  // Try to connect for two seconds during setup
+  Serial.println("Attempting Network Connection");
+  for (int x = 0; x++; x < 20)
   {
-    Serial.print(".");
-    delay(100);
+    if (!Zigbee.connected()) 
+    {
+      Serial.print(".");
+      delay(100);
+    }
   }
-  Serial.println("\nZigbee Device Connected!\n");
+  if (Zigbee.connected()) Serial.println("\nZigbee Device Connected!\n");
+  else Serial.println("\nZigbee Device Connection Unsuccessful!\n");
+  
   // Create Button Task
   xTaskCreate(
     buttonTask,          // Task function
@@ -135,15 +153,16 @@ void setup()
     5,                   // Priority
     NULL);               // Task handle
 
-  // Create Counting Task
+  // Create Battery Task
   xTaskCreate(
-    counting,            // Task function
-    "CountingTask",      // Name
+    checkBattery,            // Task function
+    "BatteryTask",      // Name
     2048,                // Stack size
     NULL,                // Parameters
     1,                   // Priority
     NULL);               // Task handle
 
+  // Create Zigbee Temp Sensor Task
   xTaskCreate(
     temp_sensor_value_update,            // Task function
     "DistanceTask",      // Name
@@ -234,9 +253,9 @@ void updateDisplay()
 
   if (currentPage == PAGE_HOME) 
   {
-    Serial.printf("PAGE: HOME");
+    Serial.printf("PAGE: HOME\n");
     u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr(0, 10, "SPOT - ParkSense v1.00");
+    u8g2.drawStr(0, 10, "SPOT - ParkSense v1.0");
     u8g2.drawHLine(0, 12, 128);  // Horizontal line under title
 
     // Perimeter box
@@ -257,15 +276,21 @@ void updateDisplay()
     u8g2.setCursor(boxX + 5, boxY + 18);
     u8g2.print("Last TOF: ");
     char outputString[10];
-    sprintf(outputString, "%.2f m", output_value);
-    u8g2.print(outputString);
+    sprintf(outputString, "%.2f mm", output_value);
+    if (output_value > 0) u8g2.print(outputString);
+    else u8g2.print("Out of Range");
     
     u8g2.setCursor(boxX + 5, boxY + 28);
-    u8g2.print("YaSolR v1.2.3");
+    u8g2.print("Zigbee Status: ");
+    if (Zigbee.connected()) u8g2.print("Connected");
+    else u8g2.print("Not Connected");
+    
+    u8g2.setCursor(boxX + 5, boxY + 38);
+    u8g2.print("Signal Strength");
   } 
   else 
   {
-    Serial.printf("PAGE: DIAGNOSTICS");
+    Serial.printf("PAGE: DIAGNOSTICS\n");
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(0, 10, "Diagnostics");
     u8g2.drawHLine(0, 12, 128);
@@ -273,6 +298,8 @@ void updateDisplay()
     // Battery label
     u8g2.setFont(u8g2_font_4x6_tf);
     u8g2.drawStr(0, 20, "Battery Level:");
+    char outputString[10];
+    sprintf(outputString, "%.2f V", batteryVoltage);
 
     // Battery dimensions
     const int x = 0;
@@ -290,7 +317,7 @@ void updateDisplay()
     else
       u8g2.drawFrame(bx, y, blockW, blockH);  // empty block
     }
-    u8g2.drawBox(120, 27, 2, 4);  // filled block
+    u8g2.drawBox(120, 27, 2, 4);  // battery positive terminal
   }
 
   u8g2.sendBuffer();
@@ -367,13 +394,76 @@ void buttonTask(void *arg)
 /*--------------------------------------------------------------------------------------*/
 
 // FreeRTOS task used to demo battery usage screen
-void counting(void *arg) 
+void checkBattery(void *arg) 
 {
   for (;;) 
-  {
-    count--;
-    if (count == -1) count = 10;
-    if (currentPage == PAGE_DIAGNOSTIC && displayOn) updateDisplay();
+  { 
+    if (currentPage == PAGE_DIAGNOSTIC && displayOn) 
+    {
+      // TURN ON MOSFET SWITCH
+      digitalWrite(MOSFET, HIGH);
+      
+      // Reading potentiometer value
+      potValue = analogRead(VOLTAGE);
+      batteryVoltage = ((float)potValue/4095.0);
+
+      // Counting battery blocks
+      batteryCount = 0;
+      for (int x = 0; x < 10; x++)
+      {
+        if (batteryVoltage >= batteryCutoffs[x]) batteryCount++;
+        else break;
+      }
+
+      // Actual battery voltage
+      batteryVoltage += batteryVoltage;
+
+      // Show voltage
+      updateDisplay();
+    }
+    else
+    {
+      // TURN OFF MOSFET SWITCH
+      digitalWrite(MOSFET, LOW);
+    }
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);  // Polling interval
+  }
+}
+
+// FreeRTOS task used to demo battery usage screen
+void checkConnection(void *arg) 
+{
+  for (;;) 
+  { 
+    if (currentPage == PAGE_DIAGNOSTIC && displayOn) 
+    {
+      // TURN ON MOSFET SWITCH
+      digitalWrite(MOSFET, HIGH);
+      
+      // Reading potentiometer value
+      potValue = analogRead(VOLTAGE);
+      batteryVoltage = ((float)potValue/4095.0);
+
+      // Counting battery blocks
+      batteryCount = 0;
+      for (int x = 0; x < 10; x++)
+      {
+        if (batteryVoltage >= batteryCutoffs[x]) batteryCount++;
+        else break;
+      }
+
+      // Actual battery voltage
+      batteryVoltage += batteryVoltage;
+
+      // Show voltage
+      updateDisplay();
+    }
+    else
+    {
+      // TURN OFF MOSFET SWITCH
+      digitalWrite(MOSFET, LOW);
+    }
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);  // Polling interval
   }
