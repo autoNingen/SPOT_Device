@@ -2,6 +2,9 @@
 #error "Zigbee coordinator mode is not selected in Tools->Zigbee mode"
 #endif
 
+#define RX_PIN 20
+#define TX_PIN 21
+
 #include "Zigbee.h"
 
 /* Zigbee configuration */
@@ -53,6 +56,7 @@ void receiveSensorConfig(float min_temp, float max_temp, float tolerance) {
 /********************* Arduino functions **************************/
 void setup() {
   Serial.begin(115200);
+  Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);  // UART1
 
   // Init button switch
   pinMode(button, INPUT_PULLUP);
@@ -139,5 +143,18 @@ void loop() {
     zbThermostat.getTemperature(); // requests temperature every 10s
     // Serial.printf("Loop distance info: %.2f mm\n", sensor_temp);
     // zbThermostat.printBoundDevices(Serial);
+    sendFloat(Serial1, sensor_temp);
+
+    Serial.print("Sent: ");
+    Serial.println(sensor_temp);
   }
+}
+
+void sendFloat(HardwareSerial &serialPort, float value) {
+  // Convert float to string with 2 decimal places
+  char buffer[16];
+  snprintf(buffer, sizeof(buffer), "%.2f\n", value);
+
+  // Send over UART
+  serialPort.print(buffer);
 }
