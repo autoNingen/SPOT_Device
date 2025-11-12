@@ -1,3 +1,5 @@
+// VERIFY WORKING BEFORE PUSHING TO GITHUB
+
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -7,8 +9,8 @@
 
 /******************** CONFIGURATION *************************/
 // WiFi credentials
-const char* ssid = "TAMU_IoT";
-const char* password = "";
+const char* ssid = "TAMU_IoT"; // "TAMU_IoT"
+const char* password = "";     // ""
 
 // Azure IoT Hub info
 const char* iothubHost = "mySpotHub.azure-devices.net";
@@ -19,7 +21,7 @@ const char* sasToken = "SharedAccessSignature sr=mySpotHub.azure-devices.net%2Fd
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
-float value; // value to be send via telemetry
+String value; // value to be send via telemetry
 
 void connectToWiFi() {
     WiFi.mode(WIFI_STA);
@@ -44,7 +46,7 @@ void connectToAzure() {
 
 void sendTelemetry() {
     String topic = "devices/" + String(deviceId) + "/messages/events/";
-    String payload = "{\"Distance\": " + String(value) + ", \"status\": \"ok\"}"; // redundant conversion of string to float to string
+    String payload = "{\"Distance\": " + value + ", \"status\": \"ok\"}"; // redundant conversion of string to float to string
     client.publish(topic.c_str(), payload.c_str());
 }
 
@@ -63,10 +65,9 @@ void setup() {
 /******************** LOOP ********************/
 void loop() {
   if (Serial1.available()) {
-    String data = Serial1.readStringUntil('\n');  // Read until newline
-    value = data.toFloat();                       // Convert to float
-    Serial.print("Received float: ");
-    Serial.println(value, 2);
+    value = Serial1.readStringUntil('\n');  // Read until newline
+    Serial.print("Received struct: ");
+    Serial.println(value);
   }
   static uint32_t last_print = 0;
   if (millis() - last_print > 10000) {

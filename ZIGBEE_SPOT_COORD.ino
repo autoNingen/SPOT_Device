@@ -10,7 +10,6 @@
 /* Zigbee configuration */
 #define THERMOSTAT_ENDPOINT_NUMBER   1
 #define USE_RECEIVE_TEMP_WITH_SOURCE 1
-uint8_t button = BOOT_PIN;
 
 ZigbeeThermostat zbThermostat = ZigbeeThermostat(THERMOSTAT_ENDPOINT_NUMBER);
 
@@ -19,8 +18,6 @@ float sensor_temp;
 float sensor_max_temp;
 float sensor_min_temp;
 float sensor_tolerance;
-
-struct tm timeinfo = {};
 
 float validateSensorData(float temperature) {
   float output = (temperature - 30.0) * 100.0;
@@ -58,9 +55,6 @@ void setup() {
   Serial.begin(115200);
   Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);  // UART1
 
-  // Init button switch
-  pinMode(button, INPUT_PULLUP);
-
 // Set callback function for receiving temperature from sensor - Use only one option
 #if USE_RECEIVE_TEMP_WITH_SOURCE == 0
   zbThermostat.onTempReceive(receiveSensorTemp);  // If you bound only one sensor or you don't need to know the source of the temperature
@@ -71,27 +65,11 @@ void setup() {
   // Set callback function for receiving sensor configuration
   zbThermostat.onConfigReceive(receiveSensorConfig);
 
-  //Optional: set Zigbee device name and model
-  zbThermostat.setManufacturerAndModel("Espressif", "ZigbeeThermostat");
-
-  //Optional Time cluster configuration
-  //example time January 13, 2025 13:30:30 CET
-  timeinfo.tm_year = 2025 - 1900;  // = 2025
-  timeinfo.tm_mon = 0;             // January
-  timeinfo.tm_mday = 13;           // 13th
-  timeinfo.tm_hour = 12;           // 12 hours - 1 hour (CET)
-  timeinfo.tm_min = 30;            // 30 minutes
-  timeinfo.tm_sec = 30;            // 30 seconds
-  timeinfo.tm_isdst = -1;
-
-  // Set time and gmt offset (timezone in seconds -> CET = +3600 seconds)
-  zbThermostat.addTimeCluster(timeinfo, 3600);
-
   //Add endpoint to Zigbee Core
   Zigbee.addEndpoint(&zbThermostat);
 
   //Open network for 180 seconds after boot
-  Zigbee.setRebootOpenNetwork(180);
+  Zigbee.setRebootOpenNetwork(300);
 
   // When all EPs are registered, start Zigbee with ZIGBEE_COORDINATOR mode
   if (!Zigbee.begin(ZIGBEE_COORDINATOR)) {
@@ -126,23 +104,28 @@ void setup() {
 }
 
 void loop() {
-  // Handle button switch in loop()
-  if (digitalRead(button) == LOW) {  // Push button pressed
-    // Key debounce handling
-    while (digitalRead(button) == LOW) {
-      delay(50);
+  // Removed button functonality
+
+  // Periodically check if any end devices are connected
+  static uint32_t last_check = 0;
+  if (millis() - last_check > 30000) { // every 30 seconds
+    last_check = millis();
+
+    std::list<zb_device_params_t *> boundSensors = zbThermostat.getBoundDevices();
+    if (boundSensors.empty()) {
+      Serial.println("No end devices connected, reopening Zigbee network for 180 seconds...");
+      Zigbee.openNetwork(180); // reopen for 180 seconds
+    } else {
+      Serial.printf("%d end device(s) currently connected.\n", boundSensors.size());
     }
-    // Set reporting interval for temperature sensor
-    zbThermostat.setTemperatureReporting(0, 10, 1); // may be unnecessary
+    Serial.printf("No bound devices: %d\n", boundSensors.empty());
   }
 
-  // Print temperature sensor data each 10 seconds
+  // Print time-of-flight sensor data each 10 seconds
   static uint32_t last_print = 0;
   if (millis() - last_print > 10000) {
     last_print = millis();
-    zbThermostat.getTemperature(); // requests temperature every 10s
-    // Serial.printf("Loop distance info: %.2f mm\n", sensor_temp);
-    // zbThermostat.printBoundDevices(Serial);
+    zbThermostat.getTemperature();
     sendFloat(Serial1, sensor_temp);
 
     Serial.print("Sent: ");

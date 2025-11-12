@@ -28,7 +28,7 @@ volatile float output_value;
 // Create U8G2 display object (SH1106 128x64, I2C)
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 7, /* data=*/ 6);
 // Define SPOT ID here:
-const char* spotID = "A1";
+String spotID = String(TEMP_SENSOR_ENDPOINT_NUMBER);
 
 // Current Display State
 enum DisplayPage 
@@ -202,6 +202,7 @@ static void temp_sensor_value_update(void *arg)
     {
       digitalWrite(XSHUT, HIGH);
       float tsens_value = readSensorData();
+      tsens_value = (int)(tsens_value * 100) / 100.0; // truncate to 2 decimal places
 
       // Read sensor value
       output_value = (tsens_value - 30.0) * 100.0;
@@ -258,7 +259,7 @@ void updateDisplay()
     u8g2.setCursor(boxX + 5, boxY + 18);
     u8g2.print("Last TOF: ");
     char outputString[10];
-    sprintf(outputString, "%.2f m", output_value);
+    sprintf(outputString, "%.0f mm", output_value);
     u8g2.print(outputString);
     
     u8g2.setCursor(boxX + 5, boxY + 28);
@@ -379,4 +380,30 @@ void counting(void *arg)
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);  // Polling interval
   }
+}
+
+float encodeValue(float baseValue, String id) {
+  if (id.length() != 2) return -1;     
+  if (baseValue >= 35.0) return -2;     
+
+  int letterPart, numberPart;
+
+  // Map first char
+  char c1 = id.charAt(0);
+  if (isAlpha(c1)) letterPart = toupper(c1) - 'A' + 1;  // A=1, B=2, ...
+  else if (isDigit(c1)) letterPart = c1 - '0';          // 0–9
+  else letterPart = 0;
+
+  // Map second char
+  char c2 = id.charAt(1);
+  if (isAlpha(c2)) numberPart = toupper(c2) - 'A' + 1;
+  else if (isDigit(c2)) numberPart = c2 - '0';
+  else numberPart = 0;
+
+  // Combine mapping
+  int idCode = letterPart * 10 + numberPart;
+
+  // Add ID code as fraction
+  float encoded = baseValue + (idCode / 10000.0); // stored as 0.00ID
+  return encoded;
 }
