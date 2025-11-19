@@ -122,11 +122,9 @@ void setup()
     Serial.println("Zigbee started successfully!");
   }
   Serial.println("Connecting to network");
-  while (!Zigbee.connected()) 
-  {
-    Serial.print(".");
-    delay(100);
-  }
+  
+  bootAnimation();
+  
   Serial.println("\nZigbee Device Connected!\n");
   // Create Button Task
   xTaskCreate(
@@ -184,8 +182,7 @@ float readSensorData()
   } 
   else 
   {
-    Serial.printf(" out of range \n");
-    rangeData = -1.0; // NEGATIVE VALUE TO INDICATE "OUT OF RANGE"
+    rangeData = -5; // 0 VALUE TO INDICATE "OUT OF RANGE"
   }
 
   return rangeData;
@@ -206,9 +203,13 @@ static void temp_sensor_value_update(void *arg)
 
       // Read sensor value
       output_value = (tsens_value - 30.0) * 100.0;
-      if (output_value > 0) Serial.printf("Updated distance sensor value to %.2f mm\r\n", output_value);
-      else Serial.printf("TOF Data is out of range\n");
-
+      if (output_value > 0) {
+        Serial.printf("Updated distance sensor value to %.2f mm\r\n", output_value);
+      }
+      else {
+        tsens_value = 30;
+        Serial.printf("TOF Data is out of range\n");
+      }
       if (currentPage == PAGE_HOME) {
         updateDisplay();
       }
@@ -259,7 +260,12 @@ void updateDisplay()
     u8g2.setCursor(boxX + 5, boxY + 18);
     u8g2.print("Last TOF: ");
     char outputString[10];
-    sprintf(outputString, "%.0f mm", output_value);
+    if (output_value > 0) {
+      sprintf(outputString, "%.0f mm", output_value);
+    }
+    else {
+      sprintf(outputString, "Out of Range");
+    }
     u8g2.print(outputString);
     
     u8g2.setCursor(boxX + 5, boxY + 28);
@@ -382,28 +388,45 @@ void counting(void *arg)
   }
 }
 
-float encodeValue(float baseValue, String id) {
-  if (id.length() != 2) return -1;     
-  if (baseValue >= 35.0) return -2;     
-
-  int letterPart, numberPart;
-
-  // Map first char
-  char c1 = id.charAt(0);
-  if (isAlpha(c1)) letterPart = toupper(c1) - 'A' + 1;  // A=1, B=2, ...
-  else if (isDigit(c1)) letterPart = c1 - '0';          // 0–9
-  else letterPart = 0;
-
-  // Map second char
-  char c2 = id.charAt(1);
-  if (isAlpha(c2)) numberPart = toupper(c2) - 'A' + 1;
-  else if (isDigit(c2)) numberPart = c2 - '0';
-  else numberPart = 0;
-
-  // Combine mapping
-  int idCode = letterPart * 10 + numberPart;
-
-  // Add ID code as fraction
-  float encoded = baseValue + (idCode / 10000.0); // stored as 0.00ID
-  return encoded;
+void bootAnimation()
+{
+  for (int i=0; i < 128; i += 8)
+  {
+    u8g2.firstPage();
+    do
+    {
+      u8g2.drawBox(0, 0, i, 64);
+      u8g2.setDrawColor(0);
+      u8g2.drawStr(20, 32, "Starting...");
+      u8g2.setDrawColor(1);
+    }
+    while (u8g2.nextPage());
+    delay(30);
+  }
+  int dots = 0;
+  while (!Zigbee.connected())
+  {
+    u8g2.firstPage();
+    do
+    {
+      switch(dots)
+      {
+        case 0:
+          u8g2.drawStr(20, 32, "Connecting");
+          break;
+        case 1:
+          u8g2.drawStr(20, 32, "Connecting.");
+          break;
+        case 2:
+          u8g2.drawStr(20, 32, "Connecting..");
+          break;
+        case 3:
+          u8g2.drawStr(20, 32, "Connecting...");
+          break;
+      }
+      dots = (dots + 1) % 4;
+    }
+    while (u8g2.nextPage());
+    delay(100);
+  }
 }
