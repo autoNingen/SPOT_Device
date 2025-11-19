@@ -2,8 +2,8 @@
 #error "Zigbee coordinator mode is not selected in Tools->Zigbee mode"
 #endif
 
-#define RX_PIN 20
-#define TX_PIN 21
+#define RX_PIN 21
+#define TX_PIN 20
 
 #include "Zigbee.h"
 
@@ -18,6 +18,10 @@ float sensor_temp;
 float sensor_max_temp;
 float sensor_min_temp;
 float sensor_tolerance;
+
+// Coordinator Initialization Variables
+unsigned long timeoutTime = millis();
+const unsigned long TIMEOUT = 60000;
 
 float validateSensorData(float temperature) {
   float output = (temperature - 30.0) * 100.0;
@@ -78,13 +82,18 @@ void setup() {
     ESP.restart();
   }
 
-  Serial.println("Waiting for end device to bind to the coordinator");
   while (!zbThermostat.bound()) {
-    Serial.printf(".");
+    Serial.print(".");
     delay(500);
-  }
 
-  Serial.println();
+    // Check for timeout
+    if (millis() - timeoutTime >= TIMEOUT) {
+        Serial.println("\nBinding timeout, restarting ESP...");
+        ESP.restart();
+    }
+  }
+  
+    Serial.println();
 
   // Get temperature sensor configuration for all bound sensors by endpoint number and address
   std::list<zb_device_params_t *> boundSensors = zbThermostat.getBoundDevices();
