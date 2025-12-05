@@ -4,8 +4,8 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 
-#define RX_PIN 20
-#define TX_PIN 21
+#define RX_PIN 21
+#define TX_PIN 20
 
 /******************** CONFIGURATION *************************/
 // WiFi credentials
@@ -15,14 +15,16 @@ const char* password = "";     // ""
 // Azure IoT Hub info
 const char* iothubHost = "mySpotHub.azure-devices.net";
 const char* deviceId = "esp32-c6-gateway";
-const char* sasToken = "SharedAccessSignature sr=mySpotHub.azure-devices.net%2Fdevices%2Fesp32-c6-gateway&sig=bkrXuYsxuSW0XB3vHBzfwkZ1iR0XzcUfYuUDy%2F68tMc%3D&se=1762820310";
+const char* sasToken = "SharedAccessSignature sr=mySpotHub.azure-devices.net%2Fdevices%2Fesp32-c6-gateway&sig=y%2BuZ9W7a6Rg6%2Fyd%2Ft3S4kpMgAEK8o19rBK5EIQ4YiK8%3D&se=1764976278";
 
 /******************** WIFI + AZURE ********************/
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
-String value; // value to be send via telemetry
-
+String value; // Value to be parsed
+String v1;
+String v2 = "";
+String v3 = ""; // Values sent in telemetry struct
 void connectToWiFi() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -42,12 +44,19 @@ void connectToAzure() {
       client.connect(clientId.c_str(), username.c_str(), sasToken);
       delay(1000);
   }
+  Serial.println("Connected!");
 }
-
+// Device IDs: [1, 2, 3]
+// Device Values: [value1, value2, value3]
 void sendTelemetry() {
     String topic = "devices/" + String(deviceId) + "/messages/events/";
-    String payload = "{\"Distance\": " + value + ", \"status\": \"ok\"}"; // redundant conversion of string to float to string
+    String payload = "{\"deviceIds\": [1, 2, 3], \"deviceValues\": " + v1 + v2 + v3 + ", \"status\": \"ok\"}";
     client.publish(topic.c_str(), payload.c_str());
+}
+
+void parseValue() {
+  v1 = value;
+  // Add other distance values
 }
 
 /******************** SETUP ********************/
@@ -59,7 +68,6 @@ void setup() {
     Serial.println("Connecting to WiFi...");
     connectToWiFi();
     connectToAzure();
-    Serial.println("Connected!");
 }
 
 /******************** LOOP ********************/
@@ -72,6 +80,7 @@ void loop() {
   static uint32_t last_print = 0;
   if (millis() - last_print > 10000) {
       last_print = millis();
+      parseValue();
       sendTelemetry();
   }
 
