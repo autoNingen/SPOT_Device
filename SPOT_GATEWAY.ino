@@ -23,8 +23,8 @@ PubSubClient client(espClient);
 
 String value; // Value to be parsed
 String v1;
-String v2 = "";
-String v3 = ""; // Values sent in telemetry struct
+String carDetected = "vacant";
+
 void connectToWiFi() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -49,14 +49,27 @@ void connectToAzure() {
 // Device IDs: [1, 2, 3]
 // Device Values: [value1, value2, value3]
 void sendTelemetry() {
+    carTest();
     String topic = "devices/" + String(deviceId) + "/messages/events/";
-    String payload = "{\"deviceIds\": [1, 2, 3], \"deviceValues\": " + v1 + v2 + v3 + ", \"status\": \"ok\"}";
+    String payload = "{\"deviceIds\": [1,2,3], \"deviceValues\": [" 
+                 + String(v1) + 
+                 "], \"status\": \"" + carDetected + "\"}";
+
     client.publish(topic.c_str(), payload.c_str());
 }
 
 void parseValue() {
   v1 = value;
   // Add other distance values
+}
+
+void carTest() {
+  if (v1 == "0.00") {
+    carDetected = "vacant";
+  } else {
+    carDetected = "ok";
+  }
+  
 }
 
 /******************** SETUP ********************/
