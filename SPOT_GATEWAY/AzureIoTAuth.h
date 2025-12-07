@@ -1,6 +1,6 @@
 /*
- * AzureIoTAuth.h - Azure IoT Hub Authentication Helper UwU
- * Generates SAS tokens dynamically so you never need to reflash! ✨
+ * AzureIoTAuth.h - Azure IoT Hub Authentication Helper
+ * Generates SAS tokens dynamically eliminating the need to reflash
  */
 
 #ifndef AZURE_IOT_AUTH_H
@@ -8,9 +8,10 @@
 
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
-#include <base64.h>
 #include <Preferences.h>
+#include <time.h>
 #include "mbedtls/md.h"
+#include "mbedtls/base64.h"
 
 class AzureIoTAuth {
 private:
@@ -19,14 +20,21 @@ private:
     String deviceId;
     Preferences preferences;
 
-    // HMAC-SHA256 signing function owo
+    // HMAC-SHA256 signing function
     String hmacSha256(const String& key, const String& data) {
-        // Decode base64 key
-        int keyLen = base64_dec_len(key.c_str(), key.length());
-        uint8_t decodedKey[keyLen];
-        base64_decode((char*)decodedKey, (char*)key.c_str(), key.length());
+        // Decode base64 key using mbedtls
+        size_t keyLen;
+        uint8_t decodedKey[128];  // Max key size
 
-        // Compute HMAC
+        int ret = mbedtls_base64_decode(decodedKey, sizeof(decodedKey), &keyLen,
+                                        (const unsigned char*)key.c_str(), key.length());
+
+        if (ret != 0) {
+            Serial.println("ERROR: Base64 decode failed");
+            return "";
+        }
+
+        // Compute HMAC-SHA256
         uint8_t hmacResult[32];
         mbedtls_md_context_t ctx;
         mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
@@ -38,15 +46,23 @@ private:
         mbedtls_md_hmac_finish(&ctx, hmacResult);
         mbedtls_md_free(&ctx);
 
-        // Encode result to base64
-        int encodedLen = base64_enc_len(32);
-        char encoded[encodedLen];
-        base64_encode(encoded, (char*)hmacResult, 32);
+        // Encode result to base64 using mbedtls
+        size_t encodedLen;
+        char encoded[128];  // Max encoded size
 
+        ret = mbedtls_base64_encode((unsigned char*)encoded, sizeof(encoded), &encodedLen,
+                                    hmacResult, 32);
+
+        if (ret != 0) {
+            Serial.println("ERROR: Base64 encode failed");
+            return "";
+        }
+
+        encoded[encodedLen] = '\0';  // Null terminate
         return String(encoded);
     }
 
-    // URL encode helper UwU
+    // URL encode helper
     String urlEncode(const String& str) {
         String encoded = "";
         char c;
@@ -67,36 +83,49 @@ private:
 public:
     AzureIoTAuth() {}
 
-    // Initialize with credentials stored in NVS >///<
+    // Initialize with credentials stored in NVS
     bool begin(const String& hub, const String& device, const String& key = "") {
         hubHost = hub;
         deviceId = device;
 
         preferences.begin("azure-iot", false);
 
-        // If key provided, save it to NVS (only needed once!)
+        // If key provided, save it to NVS (only needed once)
         if (key.length() > 0) {
             preferences.putString("deviceKey", key);
-            Serial.println("✨ Saved device key to NVS! You won't need to reflash again~ UwU");
+            Serial.println("Device key saved to NVS. No reflashing required on power loss.");
         }
 
         // Load key from NVS
         deviceKey = preferences.getString("deviceKey", "");
 
         if (deviceKey.length() == 0) {
-            Serial.println("⚠ No device key found! Please provide key on first run ówò");
+            Serial.println("WARNING: No device key found. Please provide key on first run.");
             return false;
         }
 
-        Serial.println("💖 Azure IoT Auth initialized successfully!");
+        Serial.println("Azure IoT authentication initialized successfully");
         return true;
     }
 
-    // Generate a fresh SAS token! ✨
+    // Get current Unix timestamp (seconds since 1970)
+    unsigned long getUnixTime() {
+        time_t now;
+        struct tm timeinfo;
+        if (!getLocalTime(&timeinfo)) {
+            // If time not synced yet, use a far future timestamp as fallback
+            // This will be corrected after NTP sync
+            return 1735689600 + (millis() / 1000);  // Jan 1, 2025 + uptime
+        }
+        time(&now);
+        return (unsigned long)now;
+    }
+
+    // Generate a fresh SAS token
     // ttl = time to live in seconds (default 1 hour)
     String generateSasToken(unsigned long ttl = 3600) {
         // Calculate expiry time (Unix timestamp)
-        unsigned long expiry = (millis() / 1000) + ttl;
+        unsigned long expiry = getUnixTime() + ttl;
 
         // Build the string to sign
         String resourceUri = hubHost + "/devices/" + deviceId;
@@ -113,7 +142,7 @@ public:
         sasToken += "&sig=" + encodedSignature;
         sasToken += "&se=" + String(expiry);
 
-        Serial.println("🌟 Generated fresh SAS token! Expires in " + String(ttl) + " seconds~");
+        Serial.println("Generated fresh SAS token. Expires at: " + String(expiry));
 
         return sasToken;
     }
@@ -121,7 +150,7 @@ public:
     // Clear stored credentials (for testing)
     void clearCredentials() {
         preferences.clear();
-        Serial.println("🗑 Cleared stored credentials from NVS");
+        Serial.println("Cleared stored credentials from NVS");
     }
 };
 

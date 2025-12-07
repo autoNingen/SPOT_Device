@@ -1,10 +1,11 @@
-// SPOT Gateway - Now with automatic SAS token generation! UwU ✨
-// No more reflashing needed when device loses power! >w<
+// SPOT Gateway - Automatic SAS Token Generation
+// Eliminates the need to reflash when device loses power
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
-#include "AzureIoTAuth.h"  // Magic token generator~ owo
+#include <time.h>
+#include "AzureIoTAuth.h"  // Authentication helper for dynamic token generation
 
 #define RX_PIN 21
 #define TX_PIN 20
@@ -19,16 +20,16 @@ const char* iothubHost = "mySpotHub.azure-devices.net";
 const char* deviceId = "esp32-c6-gateway";
 
 // Device symmetric key (stored securely in NVS after first flash)
-// ⚠ IMPORTANT: After first successful flash, you can comment this out for security! >///<
+// IMPORTANT: After first successful flash, you can comment this out for security
 const char* deviceKey = "OoNaHkKg8sAWlv8jPYVubJZWVi2k8SMwrAIoTPenYNA=";
 
 /******************** WIFI + AZURE ********************/
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
-AzureIoTAuth azureAuth;  // Our cute token generator! (｡♥‿♥｡)
+AzureIoTAuth azureAuth;  // Token generator instance
 
-String currentSasToken = "";  // Dynamically generated token~
-unsigned long tokenExpiryTime = 0;  // When to refresh da token
+String currentSasToken = "";  // Dynamically generated token
+unsigned long tokenExpiryTime = 0;  // Token expiry tracking
 
 String value; // Value to be parsed
 String v1;
@@ -40,24 +41,44 @@ void connectToWiFi() {
     while (WiFi.status() != WL_CONNECTED) delay(500);
 }
 
-// Generate a fresh SAS token! (⁄ ⁄•⁄ω⁄•⁄ ⁄)
+// Sync time with NTP server
+void syncTime() {
+    Serial.println("Syncing time with NTP server...");
+    configTime(-6 * 3600, 0, "pool.ntp.org", "time.nist.gov");  // CST timezone (UTC-6)
+
+    struct tm timeinfo;
+    int retry = 0;
+    while (!getLocalTime(&timeinfo) && retry < 10) {
+        Serial.print(".");
+        delay(1000);
+        retry++;
+    }
+
+    if (retry < 10) {
+        Serial.println("\nTime synced! Current time: " + String(asctime(&timeinfo)));
+    } else {
+        Serial.println("\nWarning: Time sync failed, using fallback timestamp");
+    }
+}
+
+// Generate a fresh SAS token
 void refreshSasToken() {
-  Serial.println("🌸 Generating fresh SAS token...");
+  Serial.println("Generating fresh SAS token...");
   // Token valid for 1 hour (3600 seconds)
   currentSasToken = azureAuth.generateSasToken(3600);
   // Remember when it expires (with 5 min safety margin)
   tokenExpiryTime = millis() + (3600 - 300) * 1000UL;
 }
 
-// Check if token needs refreshing UwU
+// Check if token needs refreshing
 bool needsTokenRefresh() {
-  if (currentSasToken.length() == 0) return true;  // No token yet!
-  if (millis() >= tokenExpiryTime) return true;    // Token expired!
+  if (currentSasToken.length() == 0) return true;  // No token yet
+  if (millis() >= tokenExpiryTime) return true;    // Token expired
   return false;
 }
 
 void connectToAzure() {
-  // Generate token if needed~ owo
+  // Generate token if needed
   if (needsTokenRefresh()) {
     refreshSasToken();
   }
@@ -70,21 +91,21 @@ void connectToAzure() {
 
   int retryCount = 0;
   while (!client.connected() && retryCount < 5) {
-      Serial.println("💖 Connecting to Azure IoT...");
+      Serial.println("Connecting to Azure IoT Hub...");
       bool connected = client.connect(clientId.c_str(), username.c_str(), currentSasToken.c_str());
 
       if (connected) {
-        Serial.println("✨ Connected to Azure! Yay~ (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧");
+        Serial.println("Successfully connected to Azure IoT Hub");
         return;
       } else {
-        Serial.printf("⚠ Connection failed! State: %d, retrying... ówò\n", client.state());
+        Serial.printf("Connection failed! MQTT State: %d, retrying...\n", client.state());
         retryCount++;
         delay(2000);
       }
   }
 
   if (!client.connected()) {
-    Serial.println("😢 Could not connect after 5 tries... Will try again later~");
+    Serial.println("Could not connect after 5 attempts. Will retry later.");
   }
 }
 // Device IDs: [1, 2, 3]
@@ -92,8 +113,8 @@ void connectToAzure() {
 void sendTelemetry() {
     carTest();
     String topic = "devices/" + String(deviceId) + "/messages/events/";
-    String payload = "{\"deviceIds\": [1,2,3], \"deviceValues\": [" 
-                 + String(v1) + 
+    String payload = "{\"deviceIds\": [1,2,3], \"deviceValues\": ["
+                 + String(v1) +
                  "], \"status\": \"" + carDetected + "\"}";
 
     client.publish(topic.c_str(), payload.c_str());
@@ -110,7 +131,7 @@ void carTest() {
   } else {
     carDetected = "ok";
   }
-  
+
 }
 
 /******************** SETUP ********************/
@@ -119,40 +140,43 @@ void setup() {
     delay(1000);
     Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
 
-    Serial.println("🌟 SPOT Gateway starting up! OwO");
+    Serial.println("SPOT Gateway initializing...");
 
     // Initialize Azure auth (saves key to NVS on first run)
-    Serial.println("💝 Initializing Azure authentication...");
+    Serial.println("Initializing Azure authentication...");
     if (!azureAuth.begin(iothubHost, deviceId, deviceKey)) {
-        Serial.println("❌ Failed to initialize Azure auth! Check your key~ >_<");
+        Serial.println("ERROR: Failed to initialize Azure authentication. Check device key.");
         while(1) { delay(1000); }  // Stop here if auth fails
     }
 
     // Connect WiFi & Azure
-    Serial.println("📡 Connecting to WiFi...");
+    Serial.println("Connecting to WiFi...");
     connectToWiFi();
-    Serial.println("✨ WiFi connected! IP: " + WiFi.localIP().toString());
+    Serial.println("WiFi connected. IP: " + WiFi.localIP().toString());
+
+    // Sync time with NTP (required for SAS token generation)
+    syncTime();
 
     connectToAzure();
 }
 
 /******************** LOOP ********************/
 void loop() {
-  // Check if token needs refreshing (every loop is fine, it's smart!)
+  // Check if token needs refreshing
   if (needsTokenRefresh() && client.connected()) {
-    Serial.println("🔄 Token expiring soon! Refreshing and reconnecting~ UwU");
+    Serial.println("Token expiring soon. Refreshing and reconnecting...");
     client.disconnect();
     delay(100);
   }
 
-  // Handle incoming sensor data from coordinator owo
+  // Handle incoming sensor data from coordinator
   if (Serial1.available()) {
     value = Serial1.readStringUntil('\n');
-    Serial.print("📊 Received sensor data: ");
+    Serial.print("Received sensor data: ");
     Serial.println(value);
   }
 
-  // Send telemetry every 10 seconds~
+  // Send telemetry every 10 seconds
   static uint32_t last_print = 0;
   if (millis() - last_print > 10000) {
       last_print = millis();
@@ -160,7 +184,7 @@ void loop() {
       sendTelemetry();
   }
 
-  // Reconnect if disconnected (with fresh token if needed!)
+  // Reconnect if disconnected (with fresh token if needed)
   if (!client.connected()) {
     connectToAzure();
   }
